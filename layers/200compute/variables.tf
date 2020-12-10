@@ -15,11 +15,6 @@ variable "environment" {
   default     = "Development"
 }
 
-variable "env" {
-  description = "Short environment variable, e.g. Dev, Prod, Test"
-  default     = "Dev"
-}
-
 variable "INSTANCE_DEVICE_NAME" {
   default = "/dev/xvdh"
 }
@@ -29,17 +24,9 @@ variable "JENKINS_VERSION" {
 }
 
 variable "TERRAFORM_VERSION" {
-  default = "0.12.23"
-}
-
-variable "APP_INSTANCE_COUNT" {
-  default = "0"
+  default = "0.12.29"
 }
 
 variable "internal_key_pair" {
   description = "key pair for internal ec2 resources"
-}
-
-variable "APP_INSTANCE_AMI" {
-  default = ""
 }

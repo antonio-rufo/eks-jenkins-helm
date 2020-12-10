@@ -31,7 +31,7 @@ terraform {
     # Get S3 Bucket name from layer _main (`terraform output state_bucket_id`)
     bucket = "162198556136-build-state-bucket-antonio-appmod-eks-helm"
     # This key must be unique for each layer!
-    key     = "terraform.production.000base.tfstate"
+    key     = "terraform.development.000base.tfstate"
     region  = "ap-southeast-2"
     encrypt = "true"
   }

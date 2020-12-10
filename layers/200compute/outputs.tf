@@ -23,10 +23,6 @@ EOF
 ###############################################################################
 # Jenkins instance IP address
 ###############################################################################
-output "jenkins-ip" {
-  value = [aws_instance.jenkins-instance.*.public_ip]
-}
-
-output "app-ip" {
-  value = [aws_instance.app-instance.*.public_ip]
+output "docker-instance-ip" {
+  value = [aws_instance.docker-instance.*.public_ip]
 }

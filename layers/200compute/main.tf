@@ -11,14 +11,6 @@ provider "aws" {
   allowed_account_ids = [var.aws_account_id]
 }
 
-provider "random" {
-  version = "~> 2.0"
-}
-
-provider "template" {
-  version = "~> 2.0"
-}
-
 locals {
   tags = {
     Environment     = var.environment
@@ -32,16 +24,16 @@ locals {
 # `terraform output remote_state_configuration_example`
 ###############################################################################
 terraform {
-  required_version = "> 0.12, < 0.13"
+  required_version = ">= 0.14"
   required_providers {
     aws = "~> 3.6.0"
   }
 
   backend "s3" {
     # Get S3 Bucket name from layer _main (`terraform output state_bucket_id`)
-    bucket = "162198556136-build-state-bucket-appmod"
+    bucket = "162198556136-build-state-bucket-antonio-appmod-eks-helm"
     # This key must be unique for each layer!
-    key     = "terraform.production.200compute.tfstate"
+    key     = "terraform.development.200compute.tfstate"
     region  = "ap-southeast-2"
     encrypt = "true"
   }
@@ -71,8 +63,8 @@ data "terraform_remote_state" "base_network" {
   backend = "s3"
 
   config = {
-    bucket  = "162198556136-build-state-bucket-appmod"
-    key     = "terraform.production.000base.tfstate"
+    bucket  = "162198556136-build-state-bucket-antonio-appmod-eks-helm"
+    key     = "terraform.development.000base.tfstate"
     region  = "ap-southeast-2"
     encrypt = "true"
   }
@@ -91,26 +83,6 @@ locals {
 
 data "aws_caller_identity" "current" {}
 
-# Data sources to setup Jenkins server
-data "template_file" "jenkins-init" {
-  template = file("scripts/jenkins-init.sh")
-  vars = {
-    DEVICE            = var.INSTANCE_DEVICE_NAME
-    JENKINS_VERSION   = var.JENKINS_VERSION
-    TERRAFORM_VERSION = var.TERRAFORM_VERSION
-  }
-}
-
-data "template_cloudinit_config" "cloudinit-jenkins" {
-  gzip          = false
-  base64_encode = false
-
-  part {
-    content_type = "text/x-shellscript"
-    content      = data.template_file.jenkins-init.rendered
-  }
-}
-
 # Data Source to get Ubuntu AMI for Jenkins Server
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -128,13 +100,84 @@ data "aws_ami" "ubuntu" {
   owners = ["099720109477"] # Canonical
 }
 
-###############################################################################
-# Security Groups
-###############################################################################
+# ###############################################################################
+# # Jenkins
+# ###############################################################################
+# # Data sources to setup Jenkins server
+# data "template_file" "jenkins-init" {
+#   template = file("scripts/jenkins-init.sh")
+#   vars = {
+#     DEVICE            = var.INSTANCE_DEVICE_NAME
+#     JENKINS_VERSION   = var.JENKINS_VERSION
+#     TERRAFORM_VERSION = var.TERRAFORM_VERSION
+#   }
+# }
+#
+# data "template_cloudinit_config" "cloudinit-jenkins" {
+#   gzip          = false
+#   base64_encode = false
+#
+#   part {
+#     content_type = "text/x-shellscript"
+#     content      = data.template_file.jenkins-init.rendered
+#   }
+# }
 
-resource "aws_security_group" "jenkins-securitygroup" {
+###############################################################################
+# Docker
+###############################################################################
+# Data sources to setup Jenkins server
+data "template_file" "docker-init" {
+  template = file("scripts/docker-init.sh")
+}
+
+data "template_cloudinit_config" "cloudinit-docker" {
+  gzip          = false
+  base64_encode = false
+
+  part {
+    content_type = "text/x-shellscript"
+    content      = data.template_file.docker-init.rendered
+  }
+}
+
+# ###############################################################################
+# # Security Groups - Jenkins
+# ###############################################################################
+# resource "aws_security_group" "jenkins-securitygroup" {
+#   vpc_id      = local.vpc_id
+#   name        = "jenkins-securitygroup"
+#   description = "security group that allows ssh, http and all egress traffic"
+#   egress {
+#     from_port   = 0
+#     to_port     = 0
+#     protocol    = "-1"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#
+#   ingress {
+#     from_port   = 22
+#     to_port     = 22
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#   ingress {
+#     from_port   = 8080
+#     to_port     = 8080
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#   tags = {
+#     Name = "jenkins-securitygroup"
+#   }
+# }
+
+###############################################################################
+# Security Groups - Docker
+###############################################################################
+resource "aws_security_group" "docker-securitygroup" {
   vpc_id      = local.vpc_id
-  name        = "jenkins-securitygroup"
+  name        = "docker-securitygroup"
   description = "security group that allows ssh and all egress traffic"
   egress {
     from_port   = 0
@@ -149,51 +192,64 @@ resource "aws_security_group" "jenkins-securitygroup" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
   tags = {
-    Name = "jenkins-securitygroup"
+    Name = "docker-securitygroup"
   }
 }
 
-resource "aws_security_group" "app-securitygroup" {
-  vpc_id      = local.vpc_id
-  name        = "app-securitygroup"
-  description = "security group that allows ssh and all egress traffic"
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = {
-    Name = "app-securitygroup"
-  }
-}
+# ###############################################################################
+# # IAM Role - Jenkins
+# ###############################################################################
+# resource "aws_iam_role" "jenkins-role" {
+#   name               = "jenkins-role"
+#   assume_role_policy = <<EOF
+# {
+#   "Version": "2012-10-17",
+#   "Statement": [
+#     {
+#       "Action": "sts:AssumeRole",
+#       "Principal": {
+#         "Service": "ec2.amazonaws.com"
+#       },
+#       "Effect": "Allow",
+#       "Sid": ""
+#     }
+#   ]
+# }
+# EOF
+#
+# }
+#
+# resource "aws_iam_instance_profile" "jenkins-role" {
+#   name = "jenkins-role"
+#   role = aws_iam_role.jenkins-role.name
+# }
+#
+# resource "aws_iam_role_policy" "admin-policy" {
+#   name = "jenkins-admin-role-policy"
+#   role = aws_iam_role.jenkins-role.id
+#
+#   policy = <<-EOF
+#   {
+#     "Version": "2012-10-17",
+#     "Statement": [
+#       {
+#         "Action": [
+#           "*"
+#         ],
+#         "Effect": "Allow",
+#         "Resource": "*"
+#       }
+#     ]
+#   }
+#   EOF
+# }
 
 ###############################################################################
-# ECR Role - Jenkins
+# IAM Role - Docker
 ###############################################################################
-
-resource "aws_iam_role" "jenkins-role" {
-  name               = "jenkins-role"
+resource "aws_iam_role" "docker-role" {
+  name               = "docker-role"
   assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
@@ -212,14 +268,14 @@ EOF
 
 }
 
-resource "aws_iam_instance_profile" "jenkins-role" {
-  name = "jenkins-role"
-  role = aws_iam_role.jenkins-role.name
+resource "aws_iam_instance_profile" "docker-role" {
+  name = "docker-role"
+  role = aws_iam_role.docker-role.name
 }
 
-resource "aws_iam_role_policy" "admin-policy" {
-  name = "jenkins-admin-role-policy"
-  role = aws_iam_role.jenkins-role.id
+resource "aws_iam_role_policy" "docker-admin-policy" {
+  name = "docker-admin-role-policy"
+  role = aws_iam_role.docker-role.id
 
   policy = <<-EOF
   {
@@ -237,49 +293,60 @@ resource "aws_iam_role_policy" "admin-policy" {
   EOF
 }
 
+
 ###############################################################################
 # Encrypt - EBS Volumes
 ###############################################################################
-
 resource "aws_ebs_encryption_by_default" "encrypt" {
   enabled = true
 }
 
-###############################################################################
-# EC2 Instance - Jenkins
-###############################################################################
+# ###############################################################################
+# # EC2 Instance - Jenkins
+# ###############################################################################
+# resource "aws_instance" "jenkins-instance" {
+#   ami                    = data.aws_ami.ubuntu.id
+#   instance_type          = "t2.small"
+#   subnet_id              = local.PublicAZ1
+#   vpc_security_group_ids = [aws_security_group.jenkins-securitygroup.id]
+#   key_name               = var.internal_key_pair
+#   user_data              = data.template_cloudinit_config.cloudinit-jenkins.rendered
+#   iam_instance_profile   = aws_iam_instance_profile.jenkins-role.name
+#
+#   tags = {
+#     Name = "Docker-Server"
+#   }
+# }
+#
+# resource "aws_ebs_volume" "jenkins-data" {
+#   availability_zone = "ap-southeast-2a"
+#   size              = 20
+#   type              = "gp2"
+#   tags = {
+#     Name = "jenkins-data"
+#   }
+# }
+#
+# resource "aws_volume_attachment" "jenkins-data-attachment" {
+#   device_name  = var.INSTANCE_DEVICE_NAME
+#   volume_id    = aws_ebs_volume.jenkins-data.id
+#   instance_id  = aws_instance.jenkins-instance.id
+#   skip_destroy = true
+# }
 
-resource "aws_instance" "jenkins-instance" {
+###############################################################################
+# EC2 Instance - Docker
+###############################################################################
+resource "aws_instance" "docker-instance" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t2.small"
   subnet_id              = local.PublicAZ1
-  vpc_security_group_ids = [aws_security_group.jenkins-securitygroup.id]
+  vpc_security_group_ids = [aws_security_group.docker-securitygroup.id]
   key_name               = var.internal_key_pair
-  user_data              = data.template_cloudinit_config.cloudinit-jenkins.rendered
-  iam_instance_profile   = aws_iam_instance_profile.jenkins-role.name
-}
+  user_data              = data.template_cloudinit_config.cloudinit-docker.rendered
+  iam_instance_profile   = aws_iam_instance_profile.docker-role.name
 
-resource "aws_ebs_volume" "jenkins-data" {
-  availability_zone = "ap-southeast-2a"
-  size              = 20
-  type              = "gp2"
   tags = {
-    Name = "jenkins-data"
+    Name = "Docker-Server"
   }
-}
-
-resource "aws_volume_attachment" "jenkins-data-attachment" {
-  device_name  = var.INSTANCE_DEVICE_NAME
-  volume_id    = aws_ebs_volume.jenkins-data.id
-  instance_id  = aws_instance.jenkins-instance.id
-  skip_destroy = true
-}
-
-resource "aws_instance" "app-instance" {
-  count                  = var.APP_INSTANCE_COUNT
-  ami                    = var.APP_INSTANCE_AMI
-  instance_type          = "t2.micro"
-  subnet_id              = local.PublicAZ1
-  vpc_security_group_ids = [aws_security_group.app-securitygroup.id]
-  key_name               = var.internal_key_pair
 }

@@ -9,4 +9,3 @@ environment    = "Development"
 # EC2 instance
 ###############################################################################
 internal_key_pair = "BigDataUdemyPPK"
-# ami_id            = "ami-0a669382ea0feb73a"

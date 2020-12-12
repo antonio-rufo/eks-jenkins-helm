@@ -20,9 +20,16 @@ output "state_import_example" {
 EOF
 }
 
+# ###############################################################################
+# # Docker instance IP address
+# ###############################################################################
+# output "docker-instance-ip" {
+#   value = [aws_instance.docker-instance.*.public_ip]
+# }
+
 ###############################################################################
-# Jenkins instance IP address
+# EKS instance IP address
 ###############################################################################
-output "docker-instance-ip" {
-  value = [aws_instance.docker-instance.*.public_ip]
+output "eks-instance-ip" {
+  value = [aws_instance.eks-instance.*.public_ip]
 }

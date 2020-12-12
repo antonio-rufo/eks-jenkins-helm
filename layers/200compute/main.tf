@@ -123,21 +123,39 @@ data "aws_ami" "ubuntu" {
 #   }
 # }
 
+# ###############################################################################
+# # Docker
+# ###############################################################################
+# # Data sources to setup Jenkins server
+# data "template_file" "docker-init" {
+#   template = file("scripts/docker-init.sh")
+# }
+#
+# data "template_cloudinit_config" "cloudinit-docker" {
+#   gzip          = false
+#   base64_encode = false
+#
+#   part {
+#     content_type = "text/x-shellscript"
+#     content      = data.template_file.docker-init.rendered
+#   }
+# }
+
 ###############################################################################
-# Docker
+# EKSCTL
 ###############################################################################
 # Data sources to setup Jenkins server
-data "template_file" "docker-init" {
-  template = file("scripts/docker-init.sh")
+data "template_file" "eks-init" {
+  template = file("scripts/eks-init.sh")
 }
 
-data "template_cloudinit_config" "cloudinit-docker" {
+data "template_cloudinit_config" "cloudinit-eks" {
   gzip          = false
   base64_encode = false
 
   part {
     content_type = "text/x-shellscript"
-    content      = data.template_file.docker-init.rendered
+    content      = data.template_file.eks-init.rendered
   }
 }
 
@@ -172,12 +190,38 @@ data "template_cloudinit_config" "cloudinit-docker" {
 #   }
 # }
 
+# ###############################################################################
+# # Security Groups - Docker
+# ###############################################################################
+# resource "aws_security_group" "docker-securitygroup" {
+#   vpc_id      = local.vpc_id
+#   name        = "docker-securitygroup"
+#   description = "security group that allows ssh and all egress traffic"
+#   egress {
+#     from_port   = 0
+#     to_port     = 0
+#     protocol    = "-1"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#
+#   ingress {
+#     from_port   = 22
+#     to_port     = 22
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#
+#   tags = {
+#     Name = "docker-securitygroup"
+#   }
+# }
+
 ###############################################################################
 # Security Groups - Docker
 ###############################################################################
-resource "aws_security_group" "docker-securitygroup" {
+resource "aws_security_group" "eks-securitygroup" {
   vpc_id      = local.vpc_id
-  name        = "docker-securitygroup"
+  name        = "eks-securitygroup"
   description = "security group that allows ssh and all egress traffic"
   egress {
     from_port   = 0
@@ -192,8 +236,16 @@ resource "aws_security_group" "docker-securitygroup" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  ingress {
+    from_port   = 53
+    to_port     = 53
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   tags = {
-    Name = "docker-securitygroup"
+    Name = "eks-securitygroup"
   }
 }
 
@@ -245,11 +297,59 @@ resource "aws_security_group" "docker-securitygroup" {
 #   EOF
 # }
 
+# ###############################################################################
+# # IAM Role - Docker
+# ###############################################################################
+# resource "aws_iam_role" "docker-role" {
+#   name               = "docker-role"
+#   assume_role_policy = <<EOF
+# {
+#   "Version": "2012-10-17",
+#   "Statement": [
+#     {
+#       "Action": "sts:AssumeRole",
+#       "Principal": {
+#         "Service": "ec2.amazonaws.com"
+#       },
+#       "Effect": "Allow",
+#       "Sid": ""
+#     }
+#   ]
+# }
+# EOF
+#
+# }
+#
+# resource "aws_iam_instance_profile" "docker-role" {
+#   name = "docker-role"
+#   role = aws_iam_role.docker-role.name
+# }
+#
+# resource "aws_iam_role_policy" "docker-admin-policy" {
+#   name = "docker-admin-role-policy"
+#   role = aws_iam_role.docker-role.id
+#
+#   policy = <<-EOF
+#   {
+#     "Version": "2012-10-17",
+#     "Statement": [
+#       {
+#         "Action": [
+#           "*"
+#         ],
+#         "Effect": "Allow",
+#         "Resource": "*"
+#       }
+#     ]
+#   }
+#   EOF
+# }
+
 ###############################################################################
-# IAM Role - Docker
+# IAM Role - EKS
 ###############################################################################
-resource "aws_iam_role" "docker-role" {
-  name               = "docker-role"
+resource "aws_iam_role" "eks-role" {
+  name               = "eks-role"
   assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
@@ -268,14 +368,14 @@ EOF
 
 }
 
-resource "aws_iam_instance_profile" "docker-role" {
-  name = "docker-role"
-  role = aws_iam_role.docker-role.name
+resource "aws_iam_instance_profile" "eks-role" {
+  name = "eks-role"
+  role = aws_iam_role.eks-role.name
 }
 
-resource "aws_iam_role_policy" "docker-admin-policy" {
-  name = "docker-admin-role-policy"
-  role = aws_iam_role.docker-role.id
+resource "aws_iam_role_policy" "eks-admin-policy" {
+  name = "eks-admin-role-policy"
+  role = aws_iam_role.eks-role.id
 
   policy = <<-EOF
   {
@@ -334,19 +434,36 @@ resource "aws_ebs_encryption_by_default" "encrypt" {
 #   skip_destroy = true
 # }
 
+# ###############################################################################
+# # EC2 Instance - Docker
+# ###############################################################################
+# resource "aws_instance" "docker-instance" {
+#   ami                    = data.aws_ami.ubuntu.id
+#   instance_type          = "t2.small"
+#   subnet_id              = local.PublicAZ1
+#   vpc_security_group_ids = [aws_security_group.docker-securitygroup.id]
+#   key_name               = var.internal_key_pair
+#   user_data              = data.template_cloudinit_config.cloudinit-docker.rendered
+#   iam_instance_profile   = aws_iam_instance_profile.docker-role.name
+#
+#   tags = {
+#     Name = "Docker-Server"
+#   }
+# }
+
 ###############################################################################
-# EC2 Instance - Docker
+# EC2 Instance - EKSCTL
 ###############################################################################
-resource "aws_instance" "docker-instance" {
+resource "aws_instance" "eks-instance" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t2.small"
   subnet_id              = local.PublicAZ1
-  vpc_security_group_ids = [aws_security_group.docker-securitygroup.id]
+  vpc_security_group_ids = [aws_security_group.eks-securitygroup.id]
   key_name               = var.internal_key_pair
-  user_data              = data.template_cloudinit_config.cloudinit-docker.rendered
-  iam_instance_profile   = aws_iam_instance_profile.docker-role.name
+  user_data              = data.template_cloudinit_config.cloudinit-eks.rendered
+  iam_instance_profile   = aws_iam_instance_profile.eks-role.name
 
   tags = {
-    Name = "Docker-Server"
+    Name = "EKS-Server"
   }
 }

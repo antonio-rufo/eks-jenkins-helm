@@ -1,0 +1,7 @@
+autoDiscovery:
+  clusterName: eks-test
+  enabled: true
+awsRegion: ap-southeast-2
+cloudProvider: aws
+rbac:
+  create: true

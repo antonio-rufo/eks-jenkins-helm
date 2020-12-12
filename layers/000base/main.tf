@@ -62,4 +62,9 @@ module "base_network" {
   build_nat_gateways   = var.build_nat_gateways
   environment          = var.environment
   az_count             = var.az_count
+  public_subnet_tags   = [{"kubernetes.io/role/elb" = "1"} ]
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {"kubernetes.io/cluster/eks-test" = "shared"}
 }
